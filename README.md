@@ -6,9 +6,9 @@
 
 * KEYS
 
-LEFT: h, j
-RIGHT: k, l
-QUIT: q, Ctrl-C
+    * LEFT: h, j
+    * RIGHT: k, l
+    * QUIT: q, Ctrl-C
 
 Enjoy!
 
