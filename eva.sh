@@ -63,6 +63,7 @@ drawflight() {
     else
         echo -ne "\x1b[${H};${POS}H${FLIGHT}"
     fi
+    echo -ne "\x1b[$((H-1));${DISPLAPOS}H LEVEL:$LEVEL"
     echo -ne "\x1b[${H};${DISPLAPOS}H LIVES:$LIFE SCORE:$SCORE"
 }
 scroll() {
