@@ -2,7 +2,7 @@
 
 set -f
 read H W <<<"$(stty size)"
-SIDE=20
+SIDE=25
 W=$(( W - SIDE ))
 DISPLAPOS=$((W + 2 ))
 MAPSIZE=$(( W * H ))
@@ -27,6 +27,8 @@ DELAYS=(   10   9   8   7   6   6   6    5    5    5    4     4     4)
 NEXTLINE=${LEVELCUTS[$LEVEL]}
 DELAY=${DELAYS[$LEVEL]}
 
+EMPTYFLIGHT="$(printf %${#FLIGHT}s '')"
+
 hidecursor() {
     #HIDE
     echo -ne "\x1b[?25l"
@@ -41,12 +43,14 @@ hidecursor() {
 }
 
 drawflight() {
-    POS2=$(( POS - 1))
+    local screenpos=$((POS + 1))
     BASEIDX=$(( (H - 1) * W ))
     LINE=${MAP:$BASEIDX:$W}
-    COLLIDE=$(echo ${LINE:$POS2:${#FLIGHT}})
-    echo "$LINE" >> log.txt
-    if test -n "$COLLIDE"; then
+    COLLIDE="${LINE:$POS:${#FLIGHT}}"
+    CHECKLINE=${CHECKLINE-0}
+    while test "${COLLIDE## }" != "${COLLIDE}"; do COLLIDE="${COLLIDE## }";  done
+    local H2=$((H - 2))
+    if test "$CHECKLINE" != "$LINES" -a -n "${COLLIDE}"; then
         (( LIFE-- ))
         if test $LIFE -eq 0; then
             echo -ne "\x1b[${H};1H\x1bB"
@@ -56,21 +60,40 @@ drawflight() {
         fi
         echo -ne "\x1b[1;${DISPLAPOS}HCOLLISION"
     fi
-    if ((LASTPOS < POS)); then
-        echo -ne "\x1b[${H};${POS2}H ${FLIGHT}"
-    elif ((POS < W - ${#FLIGHT})); then
-        echo -ne "\x1b[${H};${POS}H${FLIGHT} "
+    if test "$CHECKLINE" -ne "$LINES" -o "$LASTPOS" -eq "$POS"; then
+        echo -ne "\x1b[${H};${screenpos}H${FLIGHT}"
     else
-        echo -ne "\x1b[${H};${POS}H${FLIGHT}"
+        if ((LASTPOS < POS)); then
+            screenpos=$((screenpos - 1))
+            echo -ne "\x1b[${H};${screenpos}H ${FLIGHT}"
+        elif ((LASTPOS > POS)); then
+            echo -ne "\x1b[${H};${screenpos}H${FLIGHT} "
+        fi
     fi
-    echo -ne "\x1b[${H};${DISPLAPOS}H LIVES:$LIFE SCORE:$SCORE"
+    echo -ne "\x1b[${H};${DISPLAPOS}H LIVES:$LIFE SCORE:$SCORE $POS"
+    CHECKLINE="$LINES"
 }
+
+mark() {
+    #DRAW ASTEROID and WALL
+    local loc="$1"
+    local art="$2"
+    local post=$(( loc + ${#art}))
+    local screenpos=$(( loc + 1 ))
+    echo -ne "\x1b[1;${screenpos}H${art}"
+    echo -ne "\x1b[1;${W}H|"
+
+    TOPLINE="${TOPLINE:0:$loc}${art}${TOPLINE:$post}"
+}
+
 scroll() {
+    exec <&-
     trap _left SIGUSR1
     trap _right SIGUSR2
-    trap 'echo "$MAP"  | tr : "\n" > a; exit' SIGTERM SIGINT
+    BLANKLINE=$(printf %${W}s "")
     while true
     do
+        #SCROLL DOWN
         echo -ne "\x1b[T"
 
         (( LINES++ ))
@@ -84,16 +107,11 @@ scroll() {
             (( SCORE++ ))
         fi
 
-        ASTERPOS=$(( RANDOM % W + 1))
-        #SCROLL DOWN
-        #DRAW ASTEROID and WALL
-        echo -ne "\x1b[0;${ASTERPOS}H${ASTEROID}"
-        echo -ne "\x1b[0;${W}H|"
+        TOPLINE="$BLANKLINE"
+        ASTERPOS=$(( RANDOM % W ))
+        mark $ASTERPOS ${ASTEROID}
 
-        PRE=$(( ASTERPOS + ${#ASTEROID} - 1 ))
-        POST=$(( W - ASTERPOS - ${#ASTEROID} + 1))
-        NEWLINE=$(printf "%${PRE}s%${POST}s" ${ASTEROID} "")
-        MAP="$NEWLINE$MAP"
+        MAP="$TOPLINE$MAP"
         MAP="${MAP:0:$MAPSIZE}"
 
         drawflight
@@ -101,10 +119,11 @@ scroll() {
         COUNT=$DELAY
         while (( COUNT-- > 0 ))
         do
-            sleep .03
+            kill -s SIGSTOP $BASHPID
         done
     done
 }
+
 _exit() {
     echo -ne "\x1b[?25h"
     stty echo cooked
@@ -115,12 +134,12 @@ _exit() {
 }
 _left() {
     LASTPOS=$POS
-    POS=$(( POS > 1 ? POS - 1 : POS ))
+    POS=$(( POS > 0 ? POS - 1 : POS ))
     drawflight
 }
 _right() {
     LASTPOS=$POS
-    POS=$(( POS < W - ${#FLIGHT} ? POS + 1 : POS ))
+    POS=$(( POS < W - ${#FLIGHT} - 1 ? POS + 1 : POS ))
     drawflight
 }
 
@@ -132,16 +151,20 @@ DRIVEPID=$!
 
 while true
 do
-    read -s -n1 key
+    key=""
+    read -s -n1 -t .005 key
     case "$key" in
         j|h)
-            kill -SIGUSR1 $DRIVEPID
+            kill -SIGUSR1 $DRIVEPID || exit
+            continue
             ;;
         k|l)
-            kill -SIGUSR2 $DRIVEPID
+            kill -SIGUSR2 $DRIVEPID || exit
+            continue
             ;;
         q)
             _exit
             ;;
     esac
+    kill -s SIGCONT $DRIVEPID || exit
 done
