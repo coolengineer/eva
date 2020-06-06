@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if test ${BASH_VERSINFO[0]} -lt 4; then
+    OLDBASH=Y
+fi
+
 set -f
 read H W <<<"$(stty size)"
 SIDE=25
@@ -90,6 +94,9 @@ scroll() {
     exec <&-
     trap _left SIGUSR1
     trap _right SIGUSR2
+    if test -z "$BASHPID"; then
+        BASHPID=$(exec $BASH -c 'echo "$PPID"')
+    fi
     BLANKLINE=$(printf %${W}s "")
     while true
     do
@@ -119,7 +126,7 @@ scroll() {
         COUNT=$DELAY
         while (( COUNT-- > 0 ))
         do
-            kill -s SIGSTOP $BASHPID
+            kill -s SIGSTOP $BASHPID || exit
         done
     done
 }
@@ -127,7 +134,7 @@ scroll() {
 _exit() {
     echo -ne "\x1b[?25h"
     stty echo cooked
-    kill $DRIVEPID 2>/dev/null || exit
+    kill $DRIVEPID $CLOCKPID 2>/dev/null || exit
     echo ""
     echo "BYE BYE!"
     exit
@@ -142,17 +149,33 @@ _right() {
     POS=$(( POS < W - ${#FLIGHT} - 1 ? POS + 1 : POS ))
     drawflight
 }
+_clock() {
+    while true; do
+       sleep $CLOCKPULSE
+       kill -s SIGCONT $DRIVEPID
+    done
+}
 
 trap _exit SIGINT SIGTERM
 
 hidecursor
 scroll &
 DRIVEPID=$!
+CLOCKPULSE=.005
+
+if test -n "$OLDBASH"; then
+    _clock &
+    CLOCKPID=$!
+fi
 
 while true
 do
     key=""
-    read -s -n1 -t .005 key
+    if test -n "$OLDBASH"; then
+        read -s -n1 key
+    else
+        read -s -n1 -t $CLOCKPULSE key
+    fi
     case "$key" in
         j|h)
             kill -SIGUSR1 $DRIVEPID || exit
@@ -166,5 +189,7 @@ do
             _exit
             ;;
     esac
-    kill -s SIGCONT $DRIVEPID || exit
+    if test -z "$OLDBASH"; then
+        kill -s SIGCONT $DRIVEPID || exit
+    fi
 done
