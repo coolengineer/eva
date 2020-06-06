@@ -13,7 +13,7 @@ MAPSIZE=$(( W * H ))
 GAMEPID=$$
 
 #GAME OPTIONS
-FLIGHT="(-@-)"
+FLIGHT="(@)"
 ASTEROID="*"
 LIFE=5
 
@@ -28,8 +28,10 @@ LEVEL=0
 #DESIGNS
 LEVELCUTS=(50 100 150 200 300 500 900 1500 3000 5000 9000 20000 60000)
 DELAYS=(   10   9   8   7   6   6   6    5    5    5    4     4     4)
+DENSITIES=(50  48  46  44  42  40  38   36   34   32   30    28    26)
 NEXTLINE=${LEVELCUTS[$LEVEL]}
 DELAY=${DELAYS[$LEVEL]}
+DENSITY=${DENSITIES[$LEVEL]}
 
 EMPTYFLIGHT="$(printf %${#FLIGHT}s '')"
 
@@ -85,7 +87,6 @@ mark() {
     local post=$(( loc + ${#art}))
     local screenpos=$(( loc + 1 ))
     echo -ne "\x1b[1;${screenpos}H${art}"
-    echo -ne "\x1b[1;${W}H|"
 
     TOPLINE="${TOPLINE:0:$loc}${art}${TOPLINE:$post}"
 }
@@ -102,6 +103,7 @@ scroll() {
     do
         #SCROLL DOWN
         echo -ne "\x1b[T"
+        echo -ne "\x1b[1;${W}H|"
 
         (( LINES++ ))
         if (( LINES == $NEXTLINE )); then
@@ -109,14 +111,21 @@ scroll() {
             echo -ne "\x1b[1;${DISPLAPOS}HLEVEL: $LEVEL"
             NEXTLINE=${LEVELCUTS[$LEVEL]:-$NEXTLINE}
             DELAY=${DELAYS[$LEVEL]:-$DELAY}
+            DENSITY=${DENSITIES[$LEVEL]:-$DENSITY}
         fi
         if (( LINES > $H )); then
             (( SCORE++ ))
         fi
 
         TOPLINE="$BLANKLINE"
-        ASTERPOS=$(( RANDOM % W ))
-        mark $ASTERPOS ${ASTEROID}
+        REMAIN=W
+        while (( REMAIN > 0 )); do
+            if (( RANDOM % DENSITY < REMAIN )); then
+                ASTERPOS=$(( RANDOM % W ))
+                mark $ASTERPOS ${ASTEROID}
+            fi
+            (( REMAIN -= DENSITY ))
+        done
 
         MAP="$TOPLINE$MAP"
         MAP="${MAP:0:$MAPSIZE}"
@@ -124,8 +133,7 @@ scroll() {
         drawflight
 
         COUNT=$DELAY
-        while (( COUNT-- > 0 ))
-        do
+        while (( COUNT-- > 0 )); do
             kill -s SIGSTOP $BASHPID || exit
         done
     done
