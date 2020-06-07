@@ -28,7 +28,7 @@ LEVEL=0
 #DESIGNS
 LEVELCUTS=(50 100 150 200 300 500 900 1500 3000 5000 9000 20000 60000)
 DELAYS=(   10   9   8   7   6   6   6    5    5    5    4     4     4)
-DENSITIES=(50  48  46  44  42  40  38   36   34   32   30    28    26)
+DENSITIES=(60  58  56  54  52  50  48   46   44   42   40    38    36)
 NEXTLINE=${LEVELCUTS[$LEVEL]}
 DELAY=${DELAYS[$LEVEL]}
 DENSITY=${DENSITIES[$LEVEL]}
@@ -38,10 +38,12 @@ EMPTYFLIGHT="$(printf %${#FLIGHT}s '')"
 hidecursor() {
     #HIDE
     echo -ne "\x1b[?25l"
+    #RESET AUTO REPEAT
+    echo -ne "\x1b[?8l"
+    #ECHO OFF
+    echo -ne "\x1b[?12l"
     #CLEAR SCREEN
     echo -ne "\x1b[2J"
-    #ECHO OFF
-    stty -echo raw
     #MOVE LASTLINE
     echo -ne "\x1b[${H};0H"
     #SAVE POSITION AND CALL IT HOME
@@ -140,8 +142,12 @@ scroll() {
 }
 
 _exit() {
+    #SHOW CURSOR
     echo -ne "\x1b[?25h"
-    stty echo cooked
+    #SET AUTO REPEAT
+    echo -ne "\x1b[?8h"
+    #ECHO ON
+    echo -ne "\x1b[?12h"
     kill $DRIVEPID $CLOCKPID 2>/dev/null || exit
     echo ""
     echo "BYE BYE!"
